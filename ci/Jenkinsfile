@@ -1,59 +1,40 @@
 pipeline {
-  agent any
+    agent any
 
-  parameters {
-    string(name: 'DOCKER_REGISTRY', defaultValue: 'docker.io', description: 'Docker registry host')
-    string(name: 'DOCKER_REPO', defaultValue: 'youruser/vle_7', description: 'Docker repository (e.g. user/repo)')
-  }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
+    environment {
+        KUBECONFIG = '/var/lib/jenkins/.kube/config'
     }
 
-    stage('Build & Push Docker Image') {
-      steps {
-        script {
-          def shortCommit = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
-          def image = "${params.DOCKER_REGISTRY}/${params.DOCKER_REPO}:${shortCommit}"
-          env.IMAGE = image
-
-          withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-            sh "docker login -u $DOCKER_USER -p $DOCKER_PASS ${params.DOCKER_REGISTRY}"
-            sh "docker build -t ${image} ."
-            sh "docker push ${image}"
-          }
+    stages {
+        stage('Clone Repo') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Xy4c773bbkuf/vle_7.git'
+            }
         }
-      }
-    }
 
-    stage('Update ConfigMap') {
-      steps {
-        sh '''
-        kubectl create configmap web-content --from-file=index.html -o yaml --dry-run=client | kubectl apply -f -
-        '''
-      }
-    }
-
-    stage('Deploy to Kubernetes') {
-      steps {
-        withCredentials([file(credentialsId: 'kubeconfig-creds', variable: 'KUBECONFIG_FILE')]) {
-          sh 'mkdir -p $HOME/.kube'
-          sh 'cp $KUBECONFIG_FILE $HOME/.kube/config'
-          sh 'kubectl apply -f deployment.yaml'
-          sh 'kubectl apply -f service.yaml'
-          sh 'kubectl set image deployment/my-app my-app=${IMAGE} --record || true'
-          sh 'kubectl rollout restart deployment my-app'
+        stage('Update ConfigMap') {
+            steps {
+                sh '''
+                kubectl create configmap web-content \
+                --from-file=index.html \
+                -o yaml --dry-run=client | kubectl apply -f -
+                '''
+            }
         }
-      }
-    }
-  }
 
-  post {
-    always {
-      echo "Pipeline finished"
+        stage('Deploy') {
+            steps {
+                sh '''
+                kubectl apply -f deployment.yaml
+                kubectl apply -f service.yaml
+                '''
+            }
+        }
+
+        stage('Restart') {
+            steps {
+                sh 'kubectl rollout restart deployment my-app'
+            }
+        }
     }
-  }
 }

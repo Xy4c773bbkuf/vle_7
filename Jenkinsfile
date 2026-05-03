@@ -1,10 +1,14 @@
 pipeline {
     agent any
 
+    environment {
+        KUBECONFIG = '/var/lib/jenkins/.kube/config'
+    }
+
     stages {
         stage('Clone Repo') {
             steps {
-                git branch: 'main', url: 'https://github.com/AadityaTiwary1/vle_7_1.git'
+                git branch: 'main', url: 'https://github.com/Xy4c773bbkuf/vle_7.git'
             }
         }
 
@@ -18,7 +22,7 @@ pipeline {
             }
         }
 
-        stage('Deploy (if not exists)') {
+        stage('Deploy') {
             steps {
                 sh '''
                 kubectl apply -f deployment.yaml
@@ -27,7 +31,7 @@ pipeline {
             }
         }
 
-        stage('Force Restart') {
+        stage('Restart') {
             steps {
                 sh 'kubectl rollout restart deployment my-app'
             }
